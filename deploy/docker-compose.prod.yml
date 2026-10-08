@@ -1,0 +1,57 @@
+# Production stack on the EC2 host: pre-built images from GHCR + Caddy for automatic HTTPS.
+# Copy this file, the Caddyfile and a filled-in .env to ~/logistics on the server (see deploy/README.md).
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?}
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?}/logistics-api:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Server=db,1433;Database=Logistics;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?}
+      RateImport__ApiKey: ${RATE_IMPORT_API_KEY:?}
+      Seed__DemoPassword: ${DEMO_PASSWORD:?}
+      Simulation__Enabled: "true"
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:?}/logistics-web:latest
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN, e.g. logistics.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  sqldata:
+  caddy_data:

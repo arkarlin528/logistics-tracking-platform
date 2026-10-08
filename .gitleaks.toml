@@ -1,0 +1,16 @@
+# Secret scanning config for CI (gitleaks). Default rules, plus an allowlist for values that are
+# public on purpose: local-dev-only settings, the throwaway CI database password, test fixtures
+# and the demo account password shown on the login page. Real secrets live only in .env / GitHub secrets.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentionally public dev/demo/test values"
+paths = [
+  '''src/Logistics\.Api/appsettings\.Development\.json''',
+  '''\.github/workflows/ci\.yml''',
+  '''\.env\.example''',
+  '''tests/.*''',
+  '''web/src/environments/.*''',
+]
